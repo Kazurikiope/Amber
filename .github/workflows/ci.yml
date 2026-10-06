@@ -32,10 +32,17 @@ jobs:
           repository: Amber-PM/BedrockData
           path: BedrockData
 
+      - name: Checkout NetherNet
+        uses: actions/checkout@v4
+        with:
+          repository: Amber-PM/NetherNet
+          path: NetherNet
+
       - name: Move dependencies to parent directory
         run: |
           mv BedrockProtocol ../BedrockProtocol
           mv BedrockData ../BedrockData
+          mv NetherNet ../NetherNet
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2

@@ -40,6 +40,7 @@ final class ServerProperties{
 	public const DEFAULT_WORLD_SEED = "level-seed";
 	public const DIFFICULTY = "difficulty";
 	public const ENABLE_IPV6 = "enable-ipv6";
+	public const ENABLE_NETHERNET = "enable-nethernet";
 	public const ENABLE_QUERY = "enable-query";
 	public const FORCE_GAME_MODE = "force-gamemode";
 	public const GAME_MODE = "gamemode";

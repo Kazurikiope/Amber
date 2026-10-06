@@ -27,6 +27,8 @@ declare(strict_types=1);
  */
 namespace pocketmine;
 
+use amber\nethernet\identity\ServerIdentity;
+use amber\nethernet\TransportException;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\command\SimpleCommandMap;
@@ -62,6 +64,8 @@ use pocketmine\network\mcpe\NetworkSession;
 use pocketmine\network\mcpe\PacketBroadcaster;
 use pocketmine\network\mcpe\protocol\ProtocolInfo;
 use pocketmine\network\mcpe\protocol\types\CompressionAlgorithm;
+use pocketmine\network\mcpe\nethernet\NetherNetIdentityHandler;
+use pocketmine\network\mcpe\nethernet\NetherNetInterface;
 use pocketmine\network\mcpe\raklib\RakLibInterface;
 use pocketmine\network\mcpe\StandardEntityEventBroadcaster;
 use pocketmine\network\mcpe\StandardPacketBroadcaster;
@@ -130,11 +134,13 @@ use Symfony\Component\Filesystem\Path;
 use function array_fill;
 use function array_sum;
 use function base64_encode;
+use function chmod;
 use function chr;
 use function cli_set_process_title;
 use function copy;
 use function count;
 use function date;
+use function extension_loaded;
 use function fclose;
 use function file_exists;
 use function file_put_contents;
@@ -870,6 +876,7 @@ class Server{
 					ServerProperties::SERVER_PORT_IPV4 => self::DEFAULT_PORT_IPV4,
 					ServerProperties::SERVER_PORT_IPV6 => self::DEFAULT_PORT_IPV6,
 					ServerProperties::ENABLE_IPV6 => true,
+					ServerProperties::ENABLE_NETHERNET => true,
 					ServerProperties::WHITELIST => false,
 					ServerProperties::MAX_PLAYERS => self::DEFAULT_MAX_PLAYERS,
 					ServerProperties::GAME_MODE => GameMode::SURVIVAL->name, //TODO: this probably shouldn't use the enum name directly
@@ -1290,6 +1297,7 @@ class Server{
 		int $port,
 		bool $ipV6,
 		bool $useQuery,
+		?NetherNetIdentityHandler $netherNetIdentity,
 		PacketBroadcaster $packetBroadcaster,
 		EntityEventBroadcaster $entityEventBroadcaster,
 		TypeConverter $typeConverter
@@ -1308,6 +1316,15 @@ class Server{
 		if($rakLibRegistered){
 			$this->logger->info($this->language->translate(KnownTranslationFactory::pocketmine_server_networkStart($prettyIp, (string) $port)));
 		}
+		if($netherNetIdentity !== null){
+			//NetherNet signaling uses TCP, so it shares the RakNet UDP port without conflict
+			try{
+				$this->network->registerInterface(new NetherNetInterface($this, $ip, $port, $this->onlineMode, $netherNetIdentity, $packetBroadcaster, $entityEventBroadcaster, $typeConverter));
+				$this->logger->info("NetherNet signaling listening on $prettyIp:$port (TCP)");
+			}catch(NetworkInterfaceStartException $e){
+				$this->logger->error("Failed to start NetherNet on $prettyIp:$port: " . $e->getMessage());
+			}
+		}
 		if($useQuery){
 			if(!$rakLibRegistered){
 				//RakLib would normally handle the transport for Query packets
@@ -1319,18 +1336,51 @@ class Server{
 		return true;
 	}
 
+	/**
+	 * Loads the long-lived NetherNet operator key, creating it on first start.
+	 * Clients pin this key, so it must survive restarts and should not be rotated casually.
+	 */
+	private function startupPrepareNetherNetIdentity() : ?NetherNetIdentityHandler{
+		if(!$this->configGroup->getConfigBool(ServerProperties::ENABLE_NETHERNET, true)){
+			return null;
+		}
+		if(!extension_loaded("webrtc")){
+			$this->logger->warning("NetherNet is enabled but ext-webrtc is not loaded; only RakNet clients will be able to connect");
+			return null;
+		}
+		$keyPath = Path::join($this->dataPath, "nethernet_identity.pem");
+		$domain = $this->configGroup->getConfigString(ServerProperties::MOTD, self::DEFAULT_SERVER_NAME);
+		try{
+			if(file_exists($keyPath)){
+				$pem = Filesystem::fileGetContents($keyPath);
+				$identity = ServerIdentity::fromPrivateKeyPem($pem, $domain === "" ? self::DEFAULT_SERVER_NAME : $domain);
+			}else{
+				$identity = ServerIdentity::generate($domain === "" ? self::DEFAULT_SERVER_NAME : $domain);
+				Filesystem::safeFilePutContents($keyPath, $identity->exportPrivateKeyPem());
+				@chmod($keyPath, 0600);
+				$this->logger->info("Generated NetherNet server identity key at $keyPath");
+			}
+		}catch(TransportException | \RuntimeException $e){
+			$this->logger->error("Failed to load NetherNet server identity from $keyPath: " . $e->getMessage());
+			return null;
+		}
+		$this->logger->debug("NetherNet server key SHA-256: " . $identity->getPublicKeySha256());
+		return new NetherNetIdentityHandler($this->authKeyProvider, $identity);
+	}
+
 	private function startupPrepareNetworkInterfaces() : bool{
 		$useQuery = $this->configGroup->getConfigBool(ServerProperties::ENABLE_QUERY, true);
 
 		$typeConverter = TypeConverter::getInstance();
 		$packetBroadcaster = $this->getPacketBroadcaster(ProtocolInfo::CURRENT_PROTOCOL);
 		$entityEventBroadcaster = $this->getEntityEventBroadcaster($packetBroadcaster, $typeConverter);
+		$netherNetIdentity = $this->startupPrepareNetherNetIdentity();
 
 		if(
-			!$this->startupPrepareConnectableNetworkInterfaces($this->getIp(), $this->getPort(), false, $useQuery, $packetBroadcaster, $entityEventBroadcaster, $typeConverter) ||
+			!$this->startupPrepareConnectableNetworkInterfaces($this->getIp(), $this->getPort(), false, $useQuery, $netherNetIdentity, $packetBroadcaster, $entityEventBroadcaster, $typeConverter) ||
 			(
 				$this->configGroup->getConfigBool(ServerProperties::ENABLE_IPV6, true) &&
-				!$this->startupPrepareConnectableNetworkInterfaces($this->getIpV6(), $this->getPortV6(), true, $useQuery, $packetBroadcaster, $entityEventBroadcaster, $typeConverter)
+				!$this->startupPrepareConnectableNetworkInterfaces($this->getIpV6(), $this->getPortV6(), true, $useQuery, $netherNetIdentity, $packetBroadcaster, $entityEventBroadcaster, $typeConverter)
 			)
 		){
 			return false;

@@ -33,6 +33,7 @@
       "ext-zlib": ">=1.2.11",
       "composer-runtime-api": "^2.0",
       "adhocore/json-comment": "~1.2.0",
+      "amber-pm/nethernet": "*@dev",
       "netresearch/jsonmapper": "~v5.0.0",
       "pocketmine/bedrock-block-upgrade-schema": "~5.2.0+bedrock-1.21.110",
       "vapebw/bedrock-data": "*@dev",
@@ -112,6 +113,13 @@
       {
          "type": "path",
          "url":  "../BedrockData",
+         "options": {
+            "symlink": false
+         }
+      },
+      {
+         "type": "path",
+         "url":  "../NetherNet",
          "options": {
             "symlink": false
          }
