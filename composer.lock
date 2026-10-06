@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "66cfafc2a83013fc6d33edf740a12e33",
+    "content-hash": "477171a6fe7cfc4eb77735bc96beb94a",
     "packages": [
         {
             "name": "adhocore/json-comment",
@@ -64,6 +64,59 @@
                 }
             ],
             "time": "2022-10-02T11:22:07+00:00"
+        },
+        {
+            "name": "amber-pm/nethernet",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "../NetherNet",
+                "reference": "3d8bdf52fe84b3a030e092cb6f83644f3d3ec989"
+            },
+            "require": {
+                "php": "^8.1",
+                "ext-openssl": "*"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "^2.1.46",
+                "phpstan/phpstan-phpunit": "^2.0",
+                "phpunit/phpunit": "^10.5.24"
+            },
+            "suggest": {
+                "ext-webrtc": "candidate native webrtc backend for a future transport impl"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "amber\\nethernet\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "amber\\nethernet\\tests\\": "tests/phpunit/"
+                }
+            },
+            "scripts": {
+                "test": "@php vendor/bin/phpunit --configuration phpunit.xml.dist",
+                "test:native": "@php vendor/bin/phpunit --configuration phpunit.native.xml.dist",
+                "analyse": "@php vendor/bin/phpstan analyse --configuration phpstan.neon.dist --no-progress --memory-limit=1G",
+                "bench:check": "@php benchmarks/bootstrap.php",
+                "check": [
+                    "@composer validate --strict",
+                    "@composer check-platform-reqs",
+                    "@test",
+                    "@analyse",
+                    "@bench:check"
+                ]
+            },
+            "license": [
+                "LGPL-3.0-only"
+            ],
+            "description": "Transport-only NetherNet library for PHP",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
         },
         {
             "name": "brick/math",
@@ -2776,6 +2829,7 @@
     "aliases": [],
     "minimum-stability": "stable",
     "stability-flags": {
+        "amber-pm/nethernet": 20,
         "vapebw/bedrock-data": 20,
         "vapebw/bedrock-protocol": 20
     },
